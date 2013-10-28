@@ -62,3 +62,41 @@ class ScadaSeries(Series):
 
         return wind_dictionary.get(farm, None)
 
+    def resample(self, time, how="mean"):
+        return ScadaSeries(self.resample(time, how))
+
+    def output_distribution(self, resample_time=None, inverse=False,
+                            cumulative=True):
+        if resample_time:
+            distro = self.resample(resample_time)
+        else:
+            distro = self.copy()
+
+        percentages = self._aggregate_cut(distro)
+        percentages.index = percentages.index.map(self._split_cut_index)
+        percentages = percentages.sort_index()
+
+        if cumulative:
+            if inverse:
+                return percentages.cumsum()
+            else:
+                return 100 - percentages.cumsum()
+        else:
+            return percentages
+
+
+    def _split_cut_index(self, cut_index):
+        begin, end  = cut_index.split(', ')
+        begin = float(begin[1:])
+        end = float(end[:-1])
+        return end
+
+
+    def _aggregate_cut(self, series):
+        cuts = pd.cut(series, np.arange(-1, series.max()+1, 1))
+        values = pd.value_counts(cuts)
+        percentages = values * 100. / float(len(series))
+        return percentages
+
+
+
