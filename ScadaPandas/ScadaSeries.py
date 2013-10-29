@@ -137,9 +137,34 @@ class ScadaSeries(Series):
 
     def sample_from_stamp(self, stamp, seconds=600):
         begin, end = self._offset(stamp, seconds=seconds)
-        return self[begin:end]
+        return ScadaSeries(self[begin:end])
 
     def _offset(self, stamp, seconds=600):
         return (stamp - datetime.timedelta(seconds=seconds),
                 stamp + datetime.timedelta(seconds=seconds))
+
+
+    # -----------
+    # Find an Epoc Point for a given ScadaSeries
+    # ------------
+
+    def find_epoc(self, window_length=5, func=None):
+
+        if func is None:
+            func = self._instantaneous_deriv
+
+        changes = pd.rolling_apply(self, window=window_length+1, func=func)
+        changes = changes.dropna()
+
+        changes.index = self.index[:-window_length]
+
+        return changes
+
+    def _instantaneous_deriv(self, array):
+
+        """ Return average time weighted deltas from an array """
+
+        delta = array[0] - array[1:]
+        time_weighted_delta = delta / np.arange(4, len(array)*4, 4)
+        return time_weighted_delta.mean()
 
