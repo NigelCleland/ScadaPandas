@@ -3,6 +3,7 @@
 
 import pandas as pd
 import numpy as np
+import datetime
 from pandas import Series
 
 class ScadaSeries(Series):
@@ -32,15 +33,18 @@ class ScadaSeries(Series):
 
         return ScadaSeries(agg_data)
 
+
     def load_windfarm(self, filename, wind_farm):
 
         wind_columns = self.wind_mapping(wind_farm)
         return self.from_file(filename, columns=wind_columns)
 
+
     def _fuzzy_search(self, columns, search_pattern):
         if not isinstance(search_pattern, list):
             search_pattern = [search_pattern]
         return [x for x in columns if any([y in x for y in search_pattern])]
+
 
     def wind_mapping(self, farm):
         """ Map a String name to a column search parameter """
@@ -62,13 +66,18 @@ class ScadaSeries(Series):
 
         return wind_dictionary.get(farm, None)
 
-    def resample(self, time, how="mean"):
+
+    def resampler(self, time, how="mean"):
         return ScadaSeries(self.resample(time, how))
 
+
+    # -------------------------------------------------------------------
+    # ---- Methods to Create a Distribution
+    # -------------------------------------------------------------------
     def output_distribution(self, resample_time=None, inverse=False,
                             cumulative=True):
         if resample_time:
-            distro = self.resample(resample_time)
+            distro = self.resampler(resample_time)
         else:
             distro = self.copy()
 
@@ -93,10 +102,44 @@ class ScadaSeries(Series):
 
 
     def _aggregate_cut(self, series):
-        cuts = pd.cut(series, np.arange(-1, series.max()+1, 1))
+        cuts = pd.cut(series, np.arange(series.min()-1, series.max()+1, 1))
         values = pd.value_counts(cuts)
         percentages = values * 100. / float(len(series))
         return percentages
 
+    # -------------------------------------------------------------------
+    # ---- Methods relating to Deviations -----
+    # -------------------------------------------------------------------
 
+    def deviation(self, resample_time=None):
+        if resample_time:
+            distro = self.resampler(resample_time)
+        else:
+            distro = self.copy()
+
+        deviations = distro.values[1:] - distro.values[:-1]
+        return ScadaSeries(deviations, index=distro.index[:-1])
+
+
+    def top_deviations(self, resample_time=None, num_deviations=5,
+                       timestamps_only=False):
+
+        deviations = self.deviation(resample_time=resample_time)
+        deviations.sort()
+        if timestamps_only:
+            return deviations.head(num_deviations).index
+        else:
+            return deviations.head(num_deviations)
+
+    # ----------
+    # Get from a Stamp level
+    # ----------
+
+    def sample_from_stamp(self, stamp, seconds=600):
+        begin, end = self._offset(stamp, seconds=seconds)
+        return self[begin:end]
+
+    def _offset(self, stamp, seconds=600):
+        return (stamp - datetime.timedelta(seconds=seconds),
+                stamp + datetime.timedelta(seconds=seconds))
 
