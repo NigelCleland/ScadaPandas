@@ -168,3 +168,17 @@ class ScadaSeries(Series):
         time_weighted_delta = delta / np.arange(4, len(array)*4, 4)
         return time_weighted_delta.mean()
 
+    def epoc_deviation(self, epoc, from_epoc=True):
+        dev = self - self[epoc]
+        if from_epoc:
+            dev = Series(dev.values, dev.index.map(
+                            lambda x: self._relative_epoc(x, epoc)))
+
+        return dev
+
+
+    def _relative_epoc(self, x, epoc):
+        if x >= epoc:
+            return (x - epoc).seconds
+        else:
+            return -1 * (epoc - x).seconds
